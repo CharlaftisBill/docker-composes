@@ -1,0 +1,95 @@
+name: cms_app
+
+services:
+
+  Wordpress:
+    image                   : maestro-public-repository.ubitech.eu/wordpress:4
+    container_name          : Wordpress # container_name can be used only if deploy.replicas=1 or ommited (defaults to 1)
+    deploy:
+      resources:
+        limits:
+          cpus              : "1.0" # cpu upper limit
+          memory            : 2048M # memory upper limit
+        reservations:
+          devices:          
+            - capabilities  : ["gpu"] # if reservetions.devices[].capabilities ommited, then defaults to `CPU` 
+    healthcheck:
+      test                  : curl http://localhost:80
+      interval              : 10s
+    environment:
+      WORDPRESS_DB_USER     : wordpress
+      WORDPRESS_DB_HOST     : "MariaDB"
+      WORDPRESS_DB_PASSWORD : wordpress
+    ports:
+      - 80:5678 # podPort:targetPort
+    depends_on:
+      - MariaDB
+    labels:
+      kompose.service.type : "nodeport"
+      kompose.service.nodeport.port : "1234" #nodeport
+      kompose.volume.size: 1Gi
+      kompose.image-pull-secret: "maestro-public-repository-ubitech-eu" # should be used in addition to https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+      kompose.image-pull-policy: "Always"
+      kompose.service.healthcheck.readiness.test: CMD curl http://localhost:80
+      kompose.service.healthcheck.readiness.interval: 10s
+    volumes:
+      - wp_data:/var/www/html
+
+  MariaDB:
+    image                   : maestro-public-repository.ubitech.eu/mariadb:10.2.14
+    container_name          : MariaDB 
+    deploy:
+      replicas              : 1 
+      resources:
+        limits:
+          cpus              : "1.0" 
+          memory            : 2048M 
+    healthcheck:
+      test              : mysqladmin -uroot -pxUNvbFUbHvv6hnkrTg86g7fXe87W9fTg status
+      interval          : 10s
+    environment:
+      MYSQL_ROOT_PASSWORD     : xUNvbFUbHvv6hnkrTg86g7fXe87W9fTg
+      MYSQL_ROOT_HOST         : '%' # unsecure just for demonstration
+      MYSQL_PASSWORD          : wordpress
+      MYSQL_USER              : wordpress
+      MYSQL_DATABASE          : wordpress
+    ports:
+      - 3306/tcp
+    labels:
+      kompose.volume.size: 10Gi
+      kompose.image-pull-secret: "maestro-public-repository-ubitech-eu" # should be used in addition to https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+      kompose.service.healthcheck.readiness.test: CMD mysqladmin -uroot -pxUNvbFUbHvv6hnkrTg86g7fXe87W9fTg status
+      kompose.service.healthcheck.readiness.interval: 10s
+    volumes:
+      - db_data:/var/lib/mysql
+
+  PhpMyAdmin:
+    image                   : maestro-public-repository.ubitech.eu/phpmyadmin/phpmyadmin:4.7
+    deploy:
+      replicas              : 3 
+      resources:
+        limits:
+          cpus              : "1.0" 
+          memory            : 2048M
+    healthcheck:
+      test              : curl http://localhost:80
+      interval          : 10s
+    environment:
+      PMA_HOST          : "MariaDB"
+      PMA_PORT          : 3306
+    ports:
+      - 80/tcp
+    depends_on:
+      - MariaDB
+    labels:
+      kompose.service.type : "nodeport"
+      kompose.service.nodeport.port : "7890" #nodeport
+      kompose.volume.size: 1Gi
+      kompose.image-pull-secret: "maestro-public-repository-ubitech-eu" # should be used in addition to https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+      kompose.image-pull-policy: "Always"
+      kompose.service.healthcheck.readiness.test: CMD curl http://localhost:80
+      kompose.service.healthcheck.readiness.interval: 10s
+
+volumes:
+  db_data:
+  wp_data:
